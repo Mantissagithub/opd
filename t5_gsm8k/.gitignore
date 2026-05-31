@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+.venv/
+
+# Model checkpoints
+t5_small_gsm8k_*/
+t5_gsm8k_gkd/
+*.safetensors
+*.bin
+
+# TensorBoard runs
+runs/
+
+# Training data / artifacts
+data/
+
+# scripts not meant for the repo (contain infra details / in-progress work)
+train.py
+teacher_inference.py
+
+# uv
+.python-version
