@@ -1,0 +1,21 @@
+[project]
+name = "qwen3-tweet-style"
+version = "0.1.0"
+description = "QLoRA fine-tuning of Qwen3 base models on the tweet-style dataset"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "trl>=0.20.0",
+    "peft>=0.13.0",
+    "transformers>=4.51.0",
+    "datasets>=3.0.0",
+    "accelerate>=1.0.0",
+    "bitsandbytes>=0.44.0",
+    "huggingface-hub>=0.26.0",
+    "rich>=13.9.0",
+    "sacrebleu>=2.4.0",
+    "rouge-score>=0.1.2",
+    "openai>=1.50.0",
+    "tqdm>=4.66.0",
+    "torch>=2.4.0",
+]

@@ -4,7 +4,7 @@
 
 implementing generalised knowledge distillation (gkd) from [this paper](https://arxiv.org/abs/2306.13649) on the gsm8k math reasoning dataset.
 
-the idea is to distill a large teacher (flan-t5-large or a remote 20b model) into a smaller student (flan-t5-small) using a mix of supervised kl and on-policy kl loss. the student samples its own generations, asks the teacher to score them, and trains on that signal — which is the on-policy part that makes gkd different from standard kd.
+the idea is to distill a large teacher (flan-t5-xxl) into a smaller student (flan-t5-small) using a mix of supervised kl and on-policy kl loss. teacher and student share the same flan-t5 vocab, so the divergence is computed over the full token distribution. the student samples its own generations, asks the teacher to score them, and trains on that signal — which is the on-policy part that makes gkd different from standard kd.
 
 ## setup
 
@@ -21,6 +21,8 @@ uv sync
 - `plot_training_metrics.py` — renders a bar chart for eval results and a training-metrics panel from tensorboard events
 
 ## results
+
+note: the numbers below are from the earlier run with a flan-t5-large teacher. the teacher is now flan-t5-xxl (`--teacher-name google/flan-t5-xl` as the oom fallback) — this table will be refreshed after the re-run.
 
 ran eval on the full gsm8k test set after training the small model for 4k update steps.
 

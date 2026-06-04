@@ -19,8 +19,8 @@ DEFAULT_LOG_DIR = SCRIPT_DIR / "runs" / "t5_small_gsm8k_gkd_true_laptop"
 def parse_args():
     parser = argparse.ArgumentParser(description="Train a T5 student with Generalized Knowledge Distillation.")
     parser.add_argument("--student-name", default="google/flan-t5-small")
-    parser.add_argument("--teacher-name", default="google/flan-t5-large")
-    parser.add_argument("--fallback-teacher-name", default="google/flan-t5-base")
+    parser.add_argument("--teacher-name", default="google/flan-t5-xxl")
+    parser.add_argument("--fallback-teacher-name", default="google/flan-t5-xl")
     parser.add_argument("--save-dir", default=str(DEFAULT_SAVE_DIR))
     parser.add_argument("--log-dir", default=str(DEFAULT_LOG_DIR))
     parser.add_argument("--training-steps", type=int, default=4000, help="Optimizer updates.")

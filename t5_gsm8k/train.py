@@ -4,29 +4,9 @@ import torch
 from transformers import T5Tokenizer, T5ForConditionalGeneration
 from torch.utils.data import DataLoader, Dataset
 from datasets import load_dataset
-import dotenv
-import os
-from openai import OpenAI
+import requests
 
-dotenv.load_dotenv()
-openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-if openrouter_api_key is None:
-    raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=openrouter_api_key,
-)
-
-prompt = """
-You are good at solving math problems. You will be given a question, think step by step and give the final answer. Example:
-Question: If there are 3 apples and you eat 1, how many apples are left
-Answer:
-Step 1: There are 3 apples.
-Step 2: You eat 1 apple.
-Step 3: 3 - 1 = 2
-Final Answer: 2
-"""
+TEACHER_URL = "http://100.113.133.12:8000"
 
 # hyperparameters from the paper
 H = {
@@ -64,7 +44,7 @@ def collate_fn(batch, tokenizer):
     return {"input_ids": enc["input_ids"], "attention_mask": enc["attention_mask"], "questions": questions, "answers": answers}
 
 def get_teacher_logprobs(prompts):
-    # returns list of (text, per-position logprobs list) per prompt
+    # hits the teacher api for each prompt, gets back generated text + per-token logprobs
     import time
     results = []
     for p in prompts:
@@ -181,7 +161,7 @@ def train():
         sup_mask = ~on_policy_mask
         loss_total = 0.0
 
-        # supervised term: (1-lambda) * E[ D(pT||pS)(y|x) ]  where y ~ teacher
+        # off-policy half — y comes from the teacher, we minimize kl between teacher and student on those
         if sup_mask.any():
             sup_questions = [questions[i] for i in range(bs) if sup_mask[i]]
             teacher_prompts = [f"Question: {q}\nAnswer:" for q in sup_questions]
@@ -204,7 +184,7 @@ def train():
             )
             loss_total = loss_total + (1 - lambd) * loss_sup
 
-        # on-policy term: lambda * E[ D(pT||pS)(y|x) ]  where y ~ pS
+        # on-policy half — student generates its own y, teacher scores it, we train on that
         if on_policy_mask.any():
             on_questions = [questions[i] for i in range(bs) if on_policy_mask[i]]
 
