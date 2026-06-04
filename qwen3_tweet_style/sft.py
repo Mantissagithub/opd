@@ -18,26 +18,26 @@ def run_sft(cfg):
     hf_username = os.environ.get("HF_USERNAME")
     hf_token = os.environ.get("HF_TOKEN")
 
-    # qlora: load the base in 4-bit nf4, train bf16 lora adapters on top
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
-
     tokenizer = AutoTokenizer.from_pretrained(cfg["base_model"])
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(
-        cfg["base_model"],
-        quantization_config=bnb_config,
-        device_map="auto",
-        torch_dtype=torch.bfloat16,
-    )
-    model.config.use_cache = False
-    model = prepare_model_for_kbit_training(model)
+    if cfg.get("load_4bit", True):
+        # qlora: 4-bit nf4 base + bf16 lora on top. works for dense models.
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+        model = AutoModelForCausalLM.from_pretrained(cfg["base_model"], quantization_config=bnb_config, device_map="auto")
+        model.config.use_cache = False
+        model = prepare_model_for_kbit_training(model)
+    else:
+        # moe experts don't 4-bit quantize, so load bf16 and do plain lora instead.
+        model = AutoModelForCausalLM.from_pretrained(cfg["base_model"], dtype=torch.bfloat16, device_map="auto")
+        model.config.use_cache = False
+        model.enable_input_require_grads()  # needed for grad checkpointing + lora
 
     lora_config = LoraConfig(
         r=cfg["lora_r"],
@@ -45,7 +45,7 @@ def run_sft(cfg):
         lora_dropout=cfg["lora_dropout"],
         bias="none",
         task_type="CAUSAL_LM",
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+        target_modules=cfg.get("target_modules", ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]),
     )
 
     # feed it as prompt/completion so trl masks the instruction and only trains on the response

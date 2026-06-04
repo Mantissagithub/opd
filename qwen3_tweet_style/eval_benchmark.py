@@ -7,6 +7,11 @@ import torch
 from datasets import load_dataset
 from openai import OpenAI
 from peft import PeftModel
+import peft.utils.transformers_weight_conversion as _twc
+
+# we only adapt attention, so the moe expert-key remap is a no-op for us. skipping it
+# also dodges a peft<->transformers api skew (WeightConverter distributed_operation).
+_twc.build_peft_weight_mapping = lambda *a, **k: {}
 from rouge_score import rouge_scorer
 from sacrebleu import sentence_bleu
 from tqdm.auto import tqdm
@@ -16,9 +21,10 @@ import sft
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+# evaluate both in full precision (bf16): adapters served merged into the bf16 base
 MODELS = [
-    {"name": "Qwen3-4B tweet-style", "base": "Qwen/Qwen3-4B-Base", "repo": "qwen3-tweet-style-4b"},
-    {"name": "Qwen3-32B tweet-style", "base": "Qwen/Qwen3-32B-Base", "repo": "qwen3-tweet-style-32b"},
+    {"name": "Qwen3-4B tweet-style", "base": "Qwen/Qwen3-4B-Base", "repo": "qwen3-tweet-style-4b", "load_4bit": False},
+    {"name": "Qwen3-30B-A3B tweet-style", "base": "Qwen/Qwen3-30B-A3B-Base", "repo": "qwen3-tweet-style-30b-a3b", "load_4bit": False},
 ]
 
 JUDGE_SYSTEM = (
@@ -45,17 +51,21 @@ def resolve_adapter(repo, hf_username):
         return f"{hf_username}/{repo}"
     raise FileNotFoundError(f"no local '{repo}' dir and no HF username for hub fallback")
 
-def load_model(base, adapter_ref):
-    bnb = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
+def load_model(base, adapter_ref, load_4bit):
     tokenizer = AutoTokenizer.from_pretrained(adapter_ref)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(base, quantization_config=bnb, device_map="auto", torch_dtype=torch.bfloat16)
+    # match how each model was trained: 4-bit for the dense 4b, bf16 for the moe
+    if load_4bit:
+        bnb = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+        model = AutoModelForCausalLM.from_pretrained(base, quantization_config=bnb, device_map="auto")
+    else:
+        model = AutoModelForCausalLM.from_pretrained(base, dtype=torch.bfloat16, device_map="auto")
     model = PeftModel.from_pretrained(model, adapter_ref)
     model.eval()
     return model, tokenizer
@@ -81,7 +91,7 @@ def judge_score(client, judge_model, instruction, reference, prediction):
 
 def eval_model(spec, test_ds, args, judge_client):
     adapter_ref = resolve_adapter(spec["repo"], args.hf_username)
-    model, tokenizer = load_model(spec["base"], adapter_ref)
+    model, tokenizer = load_model(spec["base"], adapter_ref, spec.get("load_4bit", True))
     scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
 
     rouge_sum = bleu_sum = 0.0
@@ -120,8 +130,8 @@ def main():
     for spec in MODELS:
         try:
             results.append((spec["name"], eval_model(spec, test_ds, args, judge_client)))
-        except FileNotFoundError as e:
-            print(f"skipping {spec['name']}: {e}")
+        except Exception as e:
+            print(f"skipping {spec['name']}: {type(e).__name__}: {e}")
 
     name_w = max((len(n) for n, _ in results), default=10)
     print()

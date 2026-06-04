@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.python-version
+runs/
+checkpoint-*/
+*.safetensors
+*.bin
+training.log
+.agents/
+.claude/
+.codex/
