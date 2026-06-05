@@ -16,8 +16,6 @@ rather than hard-label distillation.
 
 ![GKD process](artifacts/gkd_process.png)
 
-*(interactive / editable: [open in excalidraw](https://excalidraw.com/#json=SRm44xKEDZve2WwbjBv19,eF1lIrnxhIleKipT2c-91g) · source: [`artifacts/gkd_process.excalidraw`](artifacts/gkd_process.excalidraw))*
-
 Each step takes a prompt `x`, picks a completion `y`, scores it under **both** models, and pushes
 the student's distribution toward the teacher's. The teacher is frozen — only the student learns.
 
