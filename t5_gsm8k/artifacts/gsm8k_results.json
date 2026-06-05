@@ -1,0 +1,8 @@
+{
+  "FLAN T5 Small": 0.023333333333333334,
+  "FLAN T5 Base": 0.03666666666666667,
+  "FLAN T5 Large": 0.07,
+  "FLAN T5 XL": 0.07,
+  "FLAN T5 XXL": 0.15,
+  "Trained Student": 0.03
+}

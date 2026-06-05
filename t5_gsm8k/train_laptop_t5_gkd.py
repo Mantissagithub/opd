@@ -310,7 +310,8 @@ def load_seq2seq_model(name_or_path, device, torch_dtype=None):
 
 
 def load_teacher_with_fallback(args):
-    preferred_dtype = torch.float16 if args.use_fp16_teacher else None
+    # bf16, not fp16 — flan-t5 (esp. xxl) overflows to NaN logits in fp16
+    preferred_dtype = torch.bfloat16 if args.use_fp16_teacher else None
     candidate_names = [args.teacher_name]
     if args.fallback_teacher_name and args.fallback_teacher_name != args.teacher_name:
         candidate_names.append(args.fallback_teacher_name)
@@ -320,7 +321,7 @@ def load_teacher_with_fallback(args):
         try:
             teacher = load_seq2seq_model(candidate, args.device, preferred_dtype)
             if preferred_dtype is not None:
-                teacher = teacher.half()
+                teacher = teacher.to(torch.bfloat16)
             return teacher, candidate
         except RuntimeError as exc:
             last_error = exc
@@ -359,10 +360,10 @@ def maybe_probe_teacher(teacher, tokenizer, dataset, args, loaded_teacher_name):
         fallback_teacher = load_seq2seq_model(
             args.fallback_teacher_name,
             args.device,
-            torch.float16 if args.use_fp16_teacher else None,
+            torch.bfloat16 if args.use_fp16_teacher else None,
         )
         if args.use_fp16_teacher:
-            fallback_teacher = fallback_teacher.half()
+            fallback_teacher = fallback_teacher.to(torch.bfloat16)
         return fallback_teacher, args.fallback_teacher_name
 
 

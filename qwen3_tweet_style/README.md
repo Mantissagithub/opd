@@ -1,7 +1,7 @@
 # qwen3_tweet_style
 
 teaching two Qwen3 base models to draft X/Twitter posts in my own voice, by
-fine-tuning them on [`Pradheep1647/tweet-style-dataset`](https://huggingface.co/datasets/Pradheep1647/tweet-style-dataset)
+fine-tuning them on [🤗 `Pradheep1647/tweet-style-dataset`](https://huggingface.co/datasets/Pradheep1647/tweet-style-dataset)
 (967 train / 85 val / 86 test, `instruction` → `response`).
 
 | model | base | adapter |

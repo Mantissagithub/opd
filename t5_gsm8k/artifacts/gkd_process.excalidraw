@@ -1,0 +1,21 @@
+{"type":"excalidraw","version":2,"source":"https://excalidraw.com","elements":[
+{"type":"text","id":"title","x":70,"y":12,"text":"On-Policy GKD: distilling flan-t5-xxl into flan-t5-small","fontSize":22,"strokeColor":"#1e1e1e"},
+{"type":"text","id":"sub","x":70,"y":46,"text":"teacher frozen  -  student imitates the teacher's token distribution  -  task: GSM8K","fontSize":14,"strokeColor":"#757575"},
+{"type":"rectangle","id":"data","x":20,"y":200,"width":120,"height":80,"roundness":{"type":3},"backgroundColor":"#a5d8ff","fillStyle":"solid","strokeColor":"#2563eb","label":{"text":"GSM8K\nprompt x","fontSize":16}},
+{"type":"arrow","id":"ad","x":142,"y":240,"width":36,"height":0,"points":[[0,0],[36,0]],"endArrowhead":"arrow","strokeColor":"#1e1e1e"},
+{"type":"diamond","id":"pick","x":180,"y":190,"width":165,"height":104,"backgroundColor":"#fff3bf","fillStyle":"solid","strokeColor":"#f59e0b","label":{"text":"pick y\nL: student samples\n1-L: data target","fontSize":14}},
+{"type":"rectangle","id":"stu","x":392,"y":92,"width":216,"height":92,"roundness":{"type":3},"backgroundColor":"#b2f2bb","fillStyle":"solid","strokeColor":"#16a34a","label":{"text":"STUDENT (trainable)\nflan-t5-small 77M\np_S(y | x)","fontSize":15}},
+{"type":"arrow","id":"ps","x":338,"y":216,"width":54,"height":-78,"points":[[0,0],[54,-78]],"endArrowhead":"arrow","strokeColor":"#16a34a","label":{"text":"(x, y)","fontSize":14}},
+{"type":"rectangle","id":"tea","x":392,"y":300,"width":216,"height":92,"roundness":{"type":3},"backgroundColor":"#ffd8a8","fillStyle":"solid","strokeColor":"#f59e0b","label":{"text":"TEACHER (frozen)\nflan-t5-xxl 11B\np_T(y | x)","fontSize":15}},
+{"type":"arrow","id":"pt","x":338,"y":268,"width":54,"height":78,"points":[[0,0],[54,78]],"endArrowhead":"arrow","strokeColor":"#f59e0b","label":{"text":"(x, y)","fontSize":14}},
+{"type":"rectangle","id":"loss","x":652,"y":196,"width":140,"height":100,"roundness":{"type":3},"backgroundColor":"#d0bfff","fillStyle":"solid","strokeColor":"#8b5cf6","label":{"text":"LOSS\nGen. JSD\nD_b(p_T || p_S)","fontSize":15}},
+{"type":"arrow","id":"sl","x":608,"y":140,"width":44,"height":92,"points":[[0,0],[44,92]],"endArrowhead":"arrow","strokeColor":"#16a34a","label":{"text":"p_S","fontSize":14}},
+{"type":"arrow","id":"tl","x":608,"y":346,"width":44,"height":-86,"points":[[0,0],[44,-86]],"endArrowhead":"arrow","strokeColor":"#f59e0b","label":{"text":"p_T","fontSize":14}},
+{"type":"arrow","id":"grad","x":722,"y":196,"width":237,"height":140,"points":[[0,0],[0,-118],[-237,-118],[-237,-104]],"endArrowhead":"arrow","strokeColor":"#ef4444","strokeStyle":"dashed","strokeWidth":2,"label":{"text":"gradient: only the student updates","fontSize":14}},
+{"type":"rectangle","id":"nz","x":15,"y":412,"width":772,"height":155,"roundness":{"type":3},"backgroundColor":"#fff3bf","fillStyle":"solid","strokeColor":"#f59e0b","strokeWidth":1,"opacity":30},
+{"type":"text","id":"nh","x":28,"y":420,"text":"how it works (notes)","fontSize":16,"strokeColor":"#b45309"},
+{"type":"text","id":"nt1","x":28,"y":448,"text":"per-token loss (temperature tau):   minimize   D_b( p_T(. | x,y)  ||  p_S(. | x,y) )","fontSize":14,"strokeColor":"#1e1e1e"},
+{"type":"text","id":"nt2","x":28,"y":474,"text":"generalized JSD:   D_b = b*KL(p_T || M) + (1-b)*KL(p_S || M),    M = b*p_S + (1-b)*p_T    (b = 0.5)","fontSize":14,"strokeColor":"#1e1e1e"},
+{"type":"text","id":"nt3","x":28,"y":500,"text":"limits:   b -> 0  gives forward KL(p_T || p_S);    b -> 1  gives reverse KL(p_S || p_T)","fontSize":14,"strokeColor":"#1e1e1e"},
+{"type":"text","id":"nt4","x":28,"y":526,"text":"objective:   (1-L)*E_data[D]  +  L*E_{y ~ p_S}[D]      on-policy term = student learns from its OWN samples","fontSize":14,"strokeColor":"#1e1e1e"}
+],"appState":{"viewBackgroundColor":"#ffffff"}}

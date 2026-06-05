@@ -1,4 +1,5 @@
 import argparse
+import json
 from pathlib import Path
 
 import torch
@@ -16,12 +17,15 @@ def parse_args():
     parser.add_argument("--base-model-name", default="google/flan-t5-base")
     parser.add_argument("--large-model-name", default="google/flan-t5-large")
     parser.add_argument("--xl-model-name", default="google/flan-t5-xl")
+    parser.add_argument("--xxl-model-name", default="google/flan-t5-xxl")
     parser.add_argument("--include-xl", action="store_true")
+    parser.add_argument("--include-xxl", action="store_true")
     parser.add_argument("--trained-dir", default="t5_small_gsm8k_gkd_true_laptop")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--micro-batch", type=int, default=2)
     parser.add_argument("--max-input-length", type=int, default=512)
     parser.add_argument("--max-new-tokens", type=int, default=128)
+    parser.add_argument("--results-out", default=None, help="optional path to write accuracies as json")
     args = parser.parse_args()
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return args
@@ -96,15 +100,19 @@ def main():
         ("FLAN T5 Small", resolve_model_ref(args.small_model_name)),
         ("FLAN T5 Base", resolve_model_ref(args.base_model_name)),
         ("FLAN T5 Large", resolve_model_ref(args.large_model_name)),
-        ("Trained Student", resolve_model_ref(args.trained_dir)),
     ]
     if args.include_xl:
-        models.insert(3, ("FLAN T5 XL", resolve_model_ref(args.xl_model_name)))
+        models.append(("FLAN T5 XL", resolve_model_ref(args.xl_model_name)))
+    if args.include_xxl:
+        models.append(("FLAN T5 XXL", resolve_model_ref(args.xxl_model_name)))
+    models.append(("Trained Student", resolve_model_ref(args.trained_dir)))
+
+    # fp32 xl/xxl won't fit, and bf16 is fine for t5 inference (fp16 overflows)
+    dtype = torch.bfloat16 if torch.cuda.is_available() else None
 
     results = []
-
     for name, model_ref in models:
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_ref).to(args.device)
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_ref, dtype=dtype).to(args.device)
         accuracy = run_eval(model, tokenizer, eval_dataset, args)
         results.append((name, accuracy))
         del model
@@ -118,6 +126,10 @@ def main():
     for name, accuracy in results:
         print(f"{name:<{name_width}}  {accuracy:.4f}")
     print()
+
+    if args.results_out:
+        Path(args.results_out).write_text(json.dumps(dict(results), indent=2))
+        print(f"wrote results to {args.results_out}")
 
 
 if __name__ == "__main__":
