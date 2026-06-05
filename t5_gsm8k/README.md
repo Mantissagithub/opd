@@ -105,6 +105,54 @@ signal. But the *absolute* ceiling is set by the student: 3% is still nowhere ne
 15%, because distillation transfers a distribution the student has to be big enough to represent.
 This is the classic **capacity gap** in distillation.
 
+### why the student barely moves
+
+so why does the little 77m student basically refuse to climb, even when i hand it an 11b teacher?
+
+honestly it comes down to: the student is too small to hold what the teacher knows. swapping in a
+smarter teacher gives it a *better target*, but not the room to actually represent that target. you
+can see it in the run — the loss keeps dropping (the student does get better at mimicking the
+teacher token-by-token), but gsm8k is graded on the final number after a whole chain of arithmetic.
+get one token in that chain wrong and the answer is wrong. so "slightly better imitation" shows up
+as a 0.2-0.7% accuracy bump instead of a real jump. the teacher got smarter; the student just
+doesn't have the parameters to follow it that far. a bigger student (or more steps — this run was
+under-trained) is the real lever, not an even bigger teacher.
+
+<details>
+<summary><b>open for the technical explanation</b></summary>
+
+<br>
+
+a few things stack up here:
+
+- **capacity / expressivity bound.** GKD minimises $\mathbb{E}\,[\mathcal{D}(p_T \Vert p_S)]$, but
+  the student's hypothesis space is tiny (77M params). there's a floor on how small that divergence
+  can get — the student literally cannot place its probability mass where an 11B teacher does. a
+  better teacher lowers the *target* but the student's attainable minimum is set by its own size, so
+  most of the extra teacher quality is unreachable.
+
+- **token-level objective vs sequence-level metric.** the loss is per-token; gsm8k accuracy is
+  exact-match on the final answer after an $L$-token reasoning chain. even with high per-token
+  agreement $p$, full-chain correctness scales roughly like $p^{L}$ — errors compound. so big drops
+  in token loss translate into only small moves in end-to-end accuracy.
+
+- **mode-covering vs mode-seeking.** at $\beta = 0.5$ the JSD sits between forward KL
+  ($D_{\mathrm{KL}}(p_T \Vert p_S)$, mode-covering — student spreads mass to cover every teacher mode,
+  which for an under-capacity model means blurrier, hedged distributions and shakier greedy decodes)
+  and reverse KL (mode-seeking). neither escapes the capacity wall; they just change *how* the limited
+  mass gets allocated.
+
+- **on-policy ≠ more capacity.** the on-policy term ($\lambda$ fraction) fixes exposure bias —
+  training the student on its *own* samples so it's corrected on the text it'll actually generate.
+  great for distribution match, but it adds zero representational capacity, so it can't close the gap
+  either.
+
+- **what would actually move it:** a larger student (flan-t5-base/large), a longer schedule (the
+  accuracy was still rising at step 1000), or stacking the orthogonal axis — test-time scaling like
+  self-consistency over the distilled student at eval.
+
+</details>
+
 ## compute scaling: where this experiment sits
 
 It's worth being precise about *which* compute-scaling axis this is, because the term gets
