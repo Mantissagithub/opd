@@ -9,7 +9,7 @@ DATA_DIR="${DATA_DIR:-data/paperhound}"
 SAVE_DIR="${SAVE_DIR:-checkpoints/paperhound-gpt-oss-20b-sft}"
 MODEL_PATH="${MODEL_PATH:-openai/gpt-oss-20b}"
 DATASET_ID="${DATASET_ID:-paperbd/paper-cited-chunks-v1}"
-HYPERPARAMS="${HYPERPARAMS:-sft-lr8e-6-ep4-lora16a32-seq4096-mbs1}"
+HYPERPARAMS="${HYPERPARAMS:-sft-lr8e-6-ep4-lora16a32-seq2048-mbs1}"
 
 require_hf_env
 
@@ -18,14 +18,23 @@ torchrun --standalone --nnodes=1 --nproc_per_node="$NPROC_PER_NODE" \
   data.train_files="$DATA_DIR/train.parquet" \
   data.val_files="$DATA_DIR/val.parquet" \
   data.messages_key=messages \
+  data.train_batch_size=16 \
   data.micro_batch_size_per_gpu=1 \
-  data.max_length=4096 \
+  data.max_length=2048 \
+  data.max_token_len_per_gpu=2048 \
+  data.truncation=left \
   optim.lr=8e-6 \
   engine=fsdp \
+  engine.model_dtype=bfloat16 \
+  engine.param_offload=True \
+  engine.optimizer_offload=True \
+  engine.use_torch_compile=False \
   model.path="$MODEL_PATH" \
-  model.override_config._attn_implementation=sdpa \
-  model.override_config.attn_implementation=sdpa \
+  +model.override_config._attn_implementation=eager \
+  +model.override_config.attn_implementation=eager \
+  model.use_remove_padding=False \
   model.enable_gradient_checkpointing=True \
+  model.enable_activation_offload=True \
   model.lora_rank=16 \
   model.lora_alpha=32 \
   model.target_modules=all-linear \

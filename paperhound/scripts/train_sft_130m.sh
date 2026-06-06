@@ -9,7 +9,7 @@ DATA_DIR="${DATA_DIR:-data/paperhound}"
 SAVE_DIR="${SAVE_DIR:-checkpoints/paperhound-smollm2-135m-sft}"
 MODEL_PATH="${MODEL_PATH:-HuggingFaceTB/SmolLM2-135M-Instruct}"
 DATASET_ID="${DATASET_ID:-paperbd/paper-cited-chunks-v1}"
-HYPERPARAMS="${HYPERPARAMS:-sft-lr2e-5-ep8-lora32a64-seq2048-mbs8}"
+HYPERPARAMS="${HYPERPARAMS:-sft-lr2e-5-ep8-lora32a64-seq4096-mbs8}"
 
 require_hf_env
 
@@ -18,13 +18,16 @@ torchrun --standalone --nnodes=1 --nproc_per_node="$NPROC_PER_NODE" \
   data.train_files="$DATA_DIR/train.parquet" \
   data.val_files="$DATA_DIR/val.parquet" \
   data.messages_key=messages \
+  data.train_batch_size=32 \
   data.micro_batch_size_per_gpu=8 \
-  data.max_length=2048 \
+  data.max_length=4096 \
+  data.truncation=left \
   optim.lr=2e-5 \
   engine=fsdp \
   model.path="$MODEL_PATH" \
-  model.override_config._attn_implementation=sdpa \
-  model.override_config.attn_implementation=sdpa \
+  +model.override_config._attn_implementation=sdpa \
+  +model.override_config.attn_implementation=sdpa \
+  model.use_remove_padding=False \
   model.lora_rank=32 \
   model.lora_alpha=64 \
   model.target_modules=all-linear \
