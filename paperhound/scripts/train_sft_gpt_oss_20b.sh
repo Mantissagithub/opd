@@ -23,6 +23,8 @@ torchrun --standalone --nnodes=1 --nproc_per_node="$NPROC_PER_NODE" \
   optim.lr=8e-6 \
   engine=fsdp \
   model.path="$MODEL_PATH" \
+  model.override_config._attn_implementation=sdpa \
+  model.override_config.attn_implementation=sdpa \
   model.enable_gradient_checkpointing=True \
   model.lora_rank=16 \
   model.lora_alpha=32 \
