@@ -3,7 +3,7 @@ name = "paperhound"
 version = "0.1.0"
 description = "verl + SGLang training scripts for paper retrieval and grounding"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "datasets>=3.0.0",
     "huggingface-hub>=0.26.0",
