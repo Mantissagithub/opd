@@ -104,6 +104,31 @@ for a single 80GB pod:
 BIG_NPROC_PER_NODE=1 BIG_N_GPUS=1 BIG_TP_SIZE=1 uv run bash scripts/train_all.sh
 ```
 
+## evaluation
+
+eval adapts [avbiswas/finetuning_recipes](https://github.com/avbiswas/finetuning_recipes) to the cited-chunks task: run each checkpoint over the held-out `val.parquet` split, then score the generations with an LLM judge.
+
+```bash
+# inference -> generations.jsonl (use --adapter for the gpt-oss base+adapter path)
+uv run python scripts/eval_cited_chunks.py -m merged/smollm2-135m \
+  --val-file data/paperhound/val.parquet -o eval_out/smollm2-135m_generations.jsonl
+
+# judge -> scores (needs OPENROUTER_API_KEY)
+uv run python scripts/llm_judge.py -i eval_out/smollm2-135m_generations.jsonl \
+  -o eval_out/smollm2-135m_judged.jsonl
+```
+
+`scripts/run_pod_eval.sh` orchestrates the whole thing on a rented gpu (download verl ckpt -> merge -> infer -> judge) for both models. the judge is OpenRouter `deepseek/deepseek-v4-pro`, scoring 1-5 on faithfulness, answer_correctness, relevance, completeness.
+
+results on the 40-row val split (2026-06-07, on-demand A6000):
+
+| checkpoint | overall | faithfulness | answer_corr. | relevance | completeness |
+|---|---|---|---|---|---|
+| `smollm2-135m` | 1.36 | 1.77 | 1.18 | 1.40 | 1.10 |
+| `gpt-oss-20b` | 3.20 | 4.53 | 2.66 | 3.55 | 2.05 |
+
+(20B scored over 38/40 — 2 judge replies were unparseable and skipped.) the merged/loadable artifacts are pushed to HF: 🤗[`smollm2-135m-...-merged`](https://huggingface.co/Pradheep1647/smollm2-135m-instruct-paper-cited-chunks-v1-sft-lr2e-5-ep8-lora32a64-seq4096-mbs8-merged) (full model) and 🤗[`gpt-oss-20b-...-adapter`](https://huggingface.co/Pradheep1647/gpt-oss-20b-paper-cited-chunks-v1-sft-lr8e-6-ep4-lora16a32-seq2048-mbs1-adapter) (LoRA adapter only — the verl merge drops the frozen MXFP4 experts, so load it on top of base `openai/gpt-oss-20b`).
+
 ## notes
 
 `gpt-oss-20b` needs real multi-GPU memory for training. the script uses LoRA, activation checkpointing, FSDP offload, and SGLang tensor-parallel rollout, but it is still a cloud/H100-class run, not a laptop run.

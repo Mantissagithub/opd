@@ -122,7 +122,11 @@ async def main():
     sem = asyncio.Semaphore(SEMAPHORE)
 
     tasks = [judge_one(sem, i, total, r) for i, r in enumerate(records)]
-    results = await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    failed = [r for r in results if isinstance(r, Exception)]
+    results = [r for r in results if not isinstance(r, Exception)]
+    if failed:
+        print(f"skipped {len(failed)} unparseable judge responses")
 
     # preserve original order
     results.sort(key=lambda r: r["id"])
