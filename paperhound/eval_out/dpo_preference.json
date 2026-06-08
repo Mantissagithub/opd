@@ -1,0 +1,14 @@
+{
+  "model": {
+    "phase": "model",
+    "n": 200,
+    "accuracy": 0.495,
+    "mean_margin": 6.0544406509399415
+  },
+  "model+dpo": {
+    "phase": "model+dpo",
+    "n": 200,
+    "accuracy": 0.515,
+    "mean_margin": 6.653265895843506
+  }
+}

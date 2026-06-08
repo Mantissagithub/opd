@@ -15,6 +15,11 @@ METRIC_KEYS = (
     "entropy",
     "learning_rate",
     "lr",
+    # dpo reward metrics (trl logs them as rewards/<name>)
+    "accuracies",
+    "margins",
+    "chosen",
+    "rejected",
 )
 
 
