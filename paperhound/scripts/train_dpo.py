@@ -4,7 +4,7 @@ import os
 
 import torch
 from datasets import load_dataset
-from peft import LoraConfig
+from peft import LoraConfig, PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, Mxfp4Config, TrainerCallback
 from trl import DPOConfig, DPOTrainer
 
@@ -57,6 +57,9 @@ def main() -> None:
     p.add_argument("--attn", default="eager")  # gpt-oss needs eager; smollm2 is fine on sdpa
     p.add_argument("--dequantize", action=argparse.BooleanOptionalAction, default=True,
                    help="dequantize MXFP4 experts (gpt-oss); use --no-dequantize for non-quantized models")
+    p.add_argument("--sft-adapter", default=None,
+                   help="merge this sft lora adapter into the base before the dpo lora, so the "
+                        "dpo reference (adapter-off) is the sft model, not the raw base")
     args = p.parse_args()
 
     tok = AutoTokenizer.from_pretrained(args.model_path)
@@ -72,6 +75,13 @@ def main() -> None:
         use_cache=False,
         quantization_config=Mxfp4Config(dequantize=True) if args.dequantize else None,
     )
+
+    # sft -> dpo: bake the sft adapter into the base so the adapter-disabled reference the
+    # dpo trainer uses is the sft model (adapter-on = sft + dpo). without this the reference
+    # is the raw base, which is the wrong recipe for a cited-chunks sft checkpoint.
+    if args.sft_adapter:
+        model = PeftModel.from_pretrained(model, args.sft_adapter)
+        model = model.merge_and_unload()
 
     peft_config = LoraConfig(
         r=args.lora_rank,

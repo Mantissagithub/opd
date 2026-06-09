@@ -8,8 +8,10 @@ NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 DATA_DIR="${DATA_DIR:-data/paperhound_dpo}"
 SAVE_DIR="${SAVE_DIR:-checkpoints/paperhound-gpt-oss-20b-dpo}"
 MODEL_PATH="${MODEL_PATH:-openai/gpt-oss-20b}"
+# sft -> dpo: merge the cited-chunks sft adapter into the base first, so the dpo reference is the sft model.
+SFT_ADAPTER="${SFT_ADAPTER:-Pradheep1647/gpt-oss-20b-paper-cited-chunks-v1-sft-lr8e-6-ep4-lora16a32-seq2048-mbs1-adapter}"
 DATASET_ID="${DATASET_ID:-paperbd/paper_preference_150K-v1}"
-HYPERPARAMS="${HYPERPARAMS:-dpo-lr5e-6-ep1-beta0.1-lora16a32-seq1024}"
+HYPERPARAMS="${HYPERPARAMS:-sft-dpo-lr5e-6-ep1-beta0.1-lora16a32-seq1024}"
 
 require_hf_env
 
@@ -18,6 +20,7 @@ accelerate launch --num_processes "$NPROC_PER_NODE" \
   scripts/train_dpo.py \
   --data-dir "$DATA_DIR" \
   --model-path "$MODEL_PATH" \
+  --sft-adapter "$SFT_ADAPTER" \
   --output-dir "$SAVE_DIR" \
   --beta 0.1 \
   --lr 5e-6 \

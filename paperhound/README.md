@@ -106,19 +106,21 @@ BIG_NPROC_PER_NODE=1 BIG_N_GPUS=1 BIG_TP_SIZE=1 uv run bash scripts/train_all.sh
 
 ## DPO (offline preference, gpt-oss-20b)
 
-trains `openai/gpt-oss-20b` on [`paperbd/paper_preference_150K-v1`](https://huggingface.co/datasets/paperbd/paper_preference_150K-v1) — a static `prompt`/`chosen`/`rejected` preference set (120K train / 31K test).
+trains on [`paperbd/paper_preference_150K-v1`](https://huggingface.co/datasets/paperbd/paper_preference_150K-v1) — a static `prompt`/`chosen`/`rejected` preference set (120K train / 31K test).
+
+**this is SFT → DPO, not base → DPO.** the DPO LoRA is trained on top of the cited-chunks SFT checkpoint, so the DPO *reference* (the adapter-disabled model) is the SFT model rather than the raw base. for gpt-oss the SFT was pushed as a LoRA adapter, so `train_dpo.py --sft-adapter <repo>` dequantizes the base, **merges the SFT adapter into it**, then attaches a fresh DPO LoRA — adapter-off = SFT, adapter-on = SFT+DPO. for smollm2 the SFT was pushed merged, so its wrapper just points `--model-path` at the merged SFT model.
 
 > verl has no offline-DPO trainer (its only DPO is an *online* extension guide that regenerates its own pairs from a reward, so it can't consume `chosen`/`rejected`). this uses **TRL `DPOTrainer`** instead, which is the right tool for a static preference set, while keeping the repo's gpt-oss-20b constraints.
 
 ```bash
 # 1. rent a gpu (avoid spot — preempts mid-run). on-demand H100 is ~2x faster than A100.
-prime availability list --gpu-type H100_80GB --gpu-count 1
+prime availability list --gpu-type A100_80GB --gpu-count 1
 bash scripts/rent_prime_pod.sh <availability-id>
 
 # 2. on the pod: snapshot the preference data (use --max-train to cap for a fast pass)
-uv run python scripts/prepare_dpo_data.py --local-dir data/paperhound_dpo --max-train 20000
+uv run python scripts/prepare_dpo_data.py --local-dir data/paperhound_dpo --max-train 3000 --max-test 200
 
-# 3. train -> plot -> push to HF
+# 3. train (merges the sft adapter first) -> plot -> push to HF
 NPROC_PER_NODE=1 uv run bash scripts/train_dpo_gpt_oss_20b.sh
 ```
 
@@ -134,16 +136,16 @@ the small model uses the same `scripts/train_dpo.py` core (not quantized → `--
 NPROC_PER_NODE=1 uv run bash scripts/train_dpo_130m.sh
 ```
 
-after training each LoRA checkpoint is pushed to HF (load it on top of its base). results on the held-out preference test split (200 pairs, `model` = base/adapter-off vs `model+dpo`), 2026-06-08 on an on-demand A100:
+after training each DPO LoRA is pushed to HF. results on the held-out preference test split (200 pairs, `model` = SFT reference/adapter-off vs `model+dpo` = SFT+DPO), 2026-06-09 on an on-demand A100:
 
 | model | phase | reward acc. | reward margin | eval_loss |
 |---|---|---|---|---|
-| `gpt-oss-20b` | model | 0.00 | 0.000 | 0.6931 |
-| `gpt-oss-20b` | model+dpo | **0.535** | **+0.033** | 0.6802 |
-| `smollm2-135m` | model | 0.00 | 0.000 | 0.6931 |
-| `smollm2-135m` | model+dpo | 0.471 | +0.005 | 0.6905 |
+| `gpt-oss-20b` | sft (ref) | 0.00 | 0.000 | 0.6931 |
+| `gpt-oss-20b` | sft+dpo | **0.595** | **+0.052** | 0.6696 |
+| `smollm2-135m` | sft (ref) | 0.00 | 0.000 | 0.6931 |
+| `smollm2-135m` | sft+dpo | 0.466 | +0.007 | 0.6891 |
 
-both improve over the base (positive margin, loss below the `ln2 = 0.6931` init); the 20B moves clearly more than the 135M, which is too small to capture much preference signal in 1 epoch. pushed: 🤗[`gpt-oss-20b-...-dpo`](https://huggingface.co/Pradheep1647/gpt-oss-20b-paper-preference-150k-v1-dpo-lr5e-6-ep1-beta0-1-lora16a32-seq1024) and 🤗[`smollm2-135m-...-dpo`](https://huggingface.co/Pradheep1647/smollm2-135m-instruct-paper-preference-150k-v1-dpo-lr5e-6-ep1-beta0-1-lora16a32-seq1024).
+both improve over their SFT reference (positive margin, loss below the `ln2 = 0.6931` init); the 20B moves clearly more than the 135M, which is too small to capture much preference signal in 1 epoch. pushed: 🤗[`gpt-oss-20b-...-sft-dpo`](https://huggingface.co/Pradheep1647/gpt-oss-20b-paper-preference-150k-v1-sft-dpo-lr5e-6-ep1-beta0-1-lora16a32-seq1024) and 🤗[`smollm2-135m-...-sft-dpo`](https://huggingface.co/Pradheep1647/smollm2-135m-instruct-paper-preference-150k-v1-sft-dpo-lr5e-6-ep1-beta0-1-lora16a32-seq1024). the gpt-oss DPO adapter loads on the base → SFT-merge → DPO-adapter stack; the smollm2 DPO adapter loads on top of the SFT-merged model.
 
 ## evaluation
 
@@ -167,10 +169,10 @@ results on the 40-row val split (2026-06-07, on-demand A6000):
 |---|---|---|---|---|---|
 | `smollm2-135m` (sft) | 1.36 | 1.77 | 1.18 | 1.40 | 1.10 |
 | `gpt-oss-20b` (sft) | 3.20 | 4.53 | 2.66 | 3.55 | 2.05 |
-| `smollm2-135m-dpo` | 1.26 | 1.77 | 1.05 | 1.18 | 1.02 |
-| `gpt-oss-20b-dpo` | 2.88 | 3.88 | 2.48 | 3.02 | 2.12 |
+| `smollm2-135m` (sft→dpo) | 1.22 | 1.52 | 1.07 | 1.18 | 1.10 |
+| `gpt-oss-20b` (sft→dpo) | 3.10 | 4.25 | 2.60 | 3.42 | 2.12 |
 
-(20B sft scored over 38/40 — 2 judge replies were unparseable and skipped.) the `-dpo` rows (2026-06-08, on-demand A100) are the offline-DPO adapters from [the DPO section](#dpo-offline-preference-gpt-oss-20b), trained on `paperbd/paper_preference_150K-v1` **from the base models** (not on top of the sft checkpoints, 1 epoch / 3000 pairs). they trail the sft rows on this cited-chunks task because they start from base rather than from the cited-chunks sft — the intended recipe for a stronger result is sft → dpo. the merged/loadable artifacts are pushed to HF: 🤗[`smollm2-135m-...-merged`](https://huggingface.co/Pradheep1647/smollm2-135m-instruct-paper-cited-chunks-v1-sft-lr2e-5-ep8-lora32a64-seq4096-mbs8-merged) (full model) and 🤗[`gpt-oss-20b-...-adapter`](https://huggingface.co/Pradheep1647/gpt-oss-20b-paper-cited-chunks-v1-sft-lr8e-6-ep4-lora16a32-seq2048-mbs1-adapter) (LoRA adapter only — the verl merge drops the frozen MXFP4 experts, so load it on top of base `openai/gpt-oss-20b`).
+(20B sft scored over 38/40 — 2 judge replies were unparseable and skipped.) the `sft→dpo` rows (2026-06-09, on-demand A100) are the offline-DPO adapters from [the DPO section](#dpo-offline-preference-gpt-oss-20b), trained on `paperbd/paper_preference_150K-v1` **on top of the cited-chunks SFT checkpoints** (1 epoch / 3000 pairs). the 20B sft→dpo (3.10) recovers nearly all of the SFT quality (3.20, within judge noise) — unlike an earlier base→dpo run that collapsed to 2.88 — because the DPO starts from and references the cited-chunks SFT. the 135M is too small for 1-epoch DPO to help on this task (its preference reward-acc stays below 0.5). pushed: 🤗[`smollm2-135m-...-sft-dpo`](https://huggingface.co/Pradheep1647/smollm2-135m-instruct-paper-preference-150k-v1-sft-dpo-lr5e-6-ep1-beta0-1-lora16a32-seq1024) and 🤗[`gpt-oss-20b-...-sft-dpo`](https://huggingface.co/Pradheep1647/gpt-oss-20b-paper-preference-150k-v1-sft-dpo-lr5e-6-ep1-beta0-1-lora16a32-seq1024).
 
 ## notes
 
