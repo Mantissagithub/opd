@@ -15,7 +15,16 @@ dependencies = [
     "rich>=13.9.0",
     "sacrebleu>=2.4.0",
     "rouge-score>=0.1.2",
+    "unbabel-comet>=2.2.0",
     "openai>=1.50.0",
     "tqdm>=4.66.0",
     "torch>=2.4.0",
+]
+
+[project.optional-dependencies]
+# on-policy distillation stack, only needed on the gpu pod: `uv sync --extra opd`.
+# verl ships the native teacher/forward-kl-topk distillation used by scripts/train_opd_4b.sh.
+opd = [
+    "verl[sglang]>=0.8.0",
+    "ray>=2.9.0",
 ]

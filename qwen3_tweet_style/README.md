@@ -61,6 +61,9 @@ scores both models on the held-out `test` split three ways, in full bf16 precisi
 
 - **ROUGE-L** and **BLEU** against the reference tweet — cheap n-gram overlap, a
   rough proxy since style isn't really an exact-match problem.
+- **COMET** ([`Unbabel/wmt22-comet-da`](https://huggingface.co/Unbabel/wmt22-comet-da)) — a
+  learned xlm-r metric scoring semantic match (src = instruction, mt = generated tweet,
+  ref = reference), less brittle than n-gram overlap. `--no-comet` to skip.
 - **LLM-as-judge** — an OpenRouter model (`openai/gpt-4o` by default,
   `--judge-model` to swap) rates 1–10 how well the generated tweet matches the
   reference in voice/tone. this is the metric that actually captures "does it sound
@@ -82,6 +85,42 @@ greedy decoding on all 86 test rows, judge = `openai/gpt-4o`.
 the 30B-A3B is a bit ahead on all three, but the gap is small — the 4B already
 picks up the voice well, and for a short-form style task it's the more practical
 model to actually serve.
+
+## on-policy distillation (the main event)
+
+with the SFT adapters as a warm start, the 4B student is pushed further by **on-policy
+(speculative) knowledge distillation** ([SKD, arXiv:2410.11325](https://arxiv.org/abs/2410.11325))
+with **verl** — distilling from the trained **Qwen3-30B-A3B** as the teacher. the student
+rolls out tweets on-policy via sglang, the frozen 30B scores top-k logprobs over each
+rollout, and a token-level **forward-KL** (top-k, K=25) pulls the student toward the teacher.
+verl 0.8 ships this natively (`distillation.enabled`, `loss_mode=forward_kl_topk`); the run
+uses the trained models, not base — nothing is trained from scratch.
+
+pipeline (runs on a 2× A100 80GB pod — 30B teacher on one gpu, 4B student on the other):
+
+```bash
+# 0. synthetic prompts (deepseek-v4-flash via openrouter), prompts-only — student
+#    self-generates the tweets on-policy, so no reference targets are needed.
+OPENROUTER_API_KEY=... HF_USERNAME=... uv run python gen_opd_prompts.py --target 1500 --push
+
+# 1. merge the trained adapters into full models (teacher served + student init), stamping
+#    the exact SFT chat template so verl's rollout prompt matches the warm-up format.
+uv run python merge_adapter.py --base Qwen/Qwen3-4B-Base \
+  --adapter Pradheep1647/qwen3-tweet-style-4b --out checkpoints/qwen3-4b-sft-merged
+uv run python merge_adapter.py --base Qwen/Qwen3-30B-A3B-Base \
+  --adapter Pradheep1647/qwen3-tweet-style-30b-a3b --out checkpoints/qwen3-30b-a3b-sft-merged
+
+# 2. build verl parquet (prompts as one user message; verl applies the SFT template)
+uv run python prepare_opd_data.py --jsonl data/opd_prompts.jsonl
+
+# 3. distill (verl, forward_kl_topk K=25). uv sync --extra opd first for verl[sglang].
+uv run --extra opd bash scripts/train_opd_4b.sh
+```
+
+the distilled adapter is merged into the warm-started 4B and pushed as a full model,
+`Pradheep1647/qwen3-tweet-style-4b-opd` (🤗), which `eval_benchmark.py` scores alongside the
+SFT models. success = the OPD 4B beats the SFT 4B judge (7.85), ideally closing toward the
+30B teacher (7.92).
 
 ## training curves
 
